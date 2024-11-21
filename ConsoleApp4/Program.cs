@@ -1,195 +1,166 @@
 ﻿using System;
 
+public class Card
+{
+    public string Number { get; private set; }
+    public string Owner { get; private set; }
+    public DateTime ValidUntil { get; private set; }
+    private string PinCode { get; set; }
+    public int Limit { get; private set; }
+    public int Balance { get; private set; }
+
+    public event Action<int> OnTopUp;
+    public event Action<int> OnSpend;
+    public event Action OnCreditUsed;
+    public event Action OnBalanceReached;
+
+    public Card(string number, string owner, DateTime validUntil, string pinCode, int limit, int startBalance)
+    {
+        Number = number;
+        Owner = owner;
+        ValidUntil = validUntil;
+        PinCode = pinCode;
+        Limit = limit;
+        Balance = startBalance;
+    }
+
+    public bool CheckPin(string pin)
+    {
+        return PinCode == pin;
+    }
+
+    public bool Buy(int amount, string pin)
+    {
+        if (!CheckPin(pin))
+        {
+            Console.WriteLine("Неверный PIN.");
+            return false;
+        }
+
+        if (amount <= 0)
+        {
+            Console.WriteLine("Сумма должна быть больше нуля.");
+            return false;
+        }
+
+        if (Balance + amount > Limit)
+        {
+            Console.WriteLine("Превышен лимит.");
+            return false;
+        }
+
+        Balance += amount;
+        OnSpend?.Invoke(amount);
+        return true;
+    }
+
+    public void TopUp(int amount)
+    {
+        if (amount <= 0)
+        {
+            Console.WriteLine("Сумма пополнения должна быть больше нуля.");
+            return;
+        }
+
+        Balance += amount;
+        OnTopUp?.Invoke(amount);
+
+        if (Balance >= Limit)
+        {
+            OnBalanceReached?.Invoke();
+        }
+    }
+
+    public void StartUsingCredit()
+    {
+        if (Balance == 0)
+        {
+            Console.WriteLine("Баланс на карте пуст.");
+            return;
+        }
+
+        if (Balance < Limit)
+        {
+            OnCreditUsed?.Invoke();
+        }
+    }
+
+    public void ChangePin(string oldPin, string newPin)
+    {
+        if (CheckPin(oldPin))
+        {
+            PinCode = newPin;
+            Console.WriteLine("PIN изменен успешно.");
+        }
+        else
+        {
+            Console.WriteLine("Неверный старый PIN.");
+        }
+    }
+
+    public void OnBalanceReplenished(int amount)
+    {
+        Console.WriteLine($"[Событие] Баланс пополнен на сумму: {amount}.");
+    }
+
+    public void OnMoneySpent(int amount)
+    {
+        Console.WriteLine($"[Событие] Потрачено: {amount}.");
+    }
+
+    public void OnCreditStarted()
+    {
+        Console.WriteLine("[Событие] Начало использования кредита.");
+    }
+
+    public void OnBalanceLimitReached()
+    {
+        Console.WriteLine("[Событие] Достигнут лимит.");
+    }
+
+    public override string ToString()
+    {
+        return $"Карта: {Number}, Владелец: {Owner}, Срок действия: {ValidUntil.ToString("MM/yy")}, Баланс: {Balance}, Лимит: {Limit}";
+    }
+}
+
 class Program
 {
-
-    interface ICalc
+    static void Main(string[] args)
     {
-        int Less(int valueToCompare);
-        int Greater(int valueToCompare);
-    }
+        Card card = new Card(
+            "1234 5678 9101 1121",
+            "Иван Иванов",
+            new DateTime(2026, 12, 31),
+            "1234",
+            50000,
+            1000
+        );
 
-    interface IOutput
-    {
-        void ShowEven();
+        card.OnTopUp += card.OnBalanceReplenished;
+        card.OnSpend += card.OnMoneySpent;
+        card.OnCreditUsed += card.OnCreditStarted;
+        card.OnBalanceReached += card.OnBalanceLimitReached;
 
-        void ShowOdd();
-    }
+        Console.WriteLine("Пополнение счета на 2000");
+        card.TopUp(2000);
 
-    interface ICalc2
-    {
-        int CountDistinct();
-        int EqualToValue(int valueToCompare);
-    }
+        Console.WriteLine("Попытка покупки на 1500");
+        card.Buy(1500, "1234");
 
-    public class Array : ICalc, IOutput, ICalc2
-    {
-        public int[] elements;
-        public int count;
+        Console.WriteLine("Пополнение счета на 40000");
+        card.TopUp(40000);
 
+        Console.WriteLine("Начало использования кредита");
+        card.StartUsingCredit();
 
-        public int CountDistinct()
-        {
-            int distinctCount = 0;
-            for (int i = 0; i < count; i++)
-            {
-                bool isUnique = true;
-                for (int j = 0; j < i; j++)
-                {
-                    if (elements[i] == elements[j])
-                    {
-                        isUnique = false;
-                        break;
-                    }
-                }
-                if (isUnique)
-                {
-                    distinctCount++;
-                }
-            }
-            return distinctCount;
-        }
+        Console.WriteLine("Изменение PIN");
+        card.ChangePin("1234", "5678");
 
-        public int EqualToValue(int valueToCompare)
-        {
-            int equalCount = 0;
-            for (int i = 0; i < count; i++)
-            {
-                if (elements[i] == valueToCompare)
-                {
-                    equalCount++;
-                }
-            }
-            return equalCount;
-        }
+        Console.WriteLine("Попытка покупки на 10000");
+        card.Buy(10000, "5678");
 
-        public Array(int capacity)
-        {
-            elements = new int[capacity];
-            count = 0;
-        }
-
-        public void Add(int element)
-        {
-            if (count == elements.Length)
-            {
-                Resize();
-            }
-            elements[count] = element;
-            count++;
-        }
-
-        public void RemoveAt(int index)
-        {
-            if (index < 0 || index >= count)
-            {
-                Console.WriteLine("Index out of bounds.");
-                return;
-            }
-
-            for (int i = index; i < count - 1; i++)
-            {
-                elements[i] = elements[i + 1];
-            }
-
-            count--;
-        }
-
-        public int Get(int index)
-        {
-            if (index < 0 || index >= count)
-            {
-                Console.WriteLine("Index out of bounds.");
-                return -1;
-            }
-            return elements[index];
-        }
-
-        public int IndexOf(int element)
-        {
-            for (int i = 0; i < count; i++)
-            {
-                if (elements[i] == element)
-                {
-                    return i;
-                }
-            }
-            return -1;
-        }
-
-        public void Print()
-        {
-            for (int i = 0; i < count; i++)
-            {
-                Console.Write(elements[i] + " ");
-            }
-            Console.WriteLine();
-        }
-
-        private void Resize()
-        {
-            int[] newArray = new int[elements.Length * 2];
-            for (int i = 0; i < elements.Length; i++)
-            {
-                newArray[i] = elements[i];
-            }
-            elements = newArray;
-        }
-
-        public int Less(int valueToCompare)
-        {
-            int lessCount = 0;
-            for (int i = 0; i < count; i++)
-            {
-                if (elements[i] < valueToCompare)
-                {
-                    lessCount++;
-                }
-            }
-            return lessCount;
-        }
-
-        public int Greater(int valueToCompare)
-        {
-            int greaterCount = 0;
-            for (int i = 0; i < count; i++)
-            {
-                if (elements[i] > valueToCompare)
-                {
-                    greaterCount++;
-                }
-            }
-            return greaterCount;
-        }
-
-        public void ShowEven()
-        {
-            
-            for (int i = 0; i < count; i++)
-            {
-                if (elements[i] % 2 != 0)
-                {
-                    Console.WriteLine(elements[i]);
-                }
-            }
-        }
-
-        public void ShowOdd()
-        {
-            for (int i = 0; i < count; i++)
-            {
-                if (elements[i] % 2 == 0)
-                {
-                    Console.WriteLine(elements[i]);
-                }
-            }
-        }
-    }
-
-    
-
-    static void Main()
-    {
-     
+        Console.WriteLine("Текущая информация о карте:");
+        Console.WriteLine(card);
     }
 }
